@@ -1,273 +1,168 @@
-import streamlit as st
+import dash
+from dash import html, dcc, Input, Output, State
+import dash_bootstrap_components as dbc
+import math
 
-# ------------- Session Setup -------------
-if "meals" not in st.session_state:
-    st.session_state.meals = {
-        "Breakfast": {"Calories": 350, "Carbs": 60, "Protein": 10, "Fat": 5, "Time": "07:00 AM", "Details": "Oatmeal, Banana"},
-        "Lunch": {"Calories": 500, "Carbs": 40, "Protein": 40, "Fat": 15, "Time": "12:30 PM", "Details": "Chicken, Rice"},
-        "Dinner": {"Calories": 600, "Carbs": 45, "Protein": 45, "Fat": 25, "Time": "07:00 PM", "Details": "Salmon, Veggies"},
+app = dash.Dash(__name__, external_stylesheets=[dbc.themes.DARKLY])
+
+# Constants
+PROTEIN_GOAL = 120
+MAX_PROTEIN = 120
+DEFAULT_TIMER = 300
+
+# All meal options, Proteinshake is last in list for ordering
+all_meals = sorted([
+    {'label': 'Hähnchenbrust', 'value': 'ChickenBreast'},
+    {'label': 'Lachsfilet', 'value': 'SalmonFilet'},
+    {'label': 'Quark', 'value': 'Quark'},
+    {'label': 'Rindfleisch ', 'value': 'Beef'},
+    {'label': 'Tofu', 'value': 'Tofu'},
+    {'label': 'Eier', 'value': 'Eggs'}
+], key=lambda x: x['label']) + [{'label': 'Proteinshake', 'value': 'Proteinshake'}]
+
+app.layout = dbc.Container([
+    html.H1("MyPump", className="text-center mt-5 mb-4", style={'fontSize': '4em', 'fontWeight': 'bold'}),
+    html.H3("Dein Proteinziel heute:", className="text-center mb-5", style={'fontSize': '2.5em'}),
+
+    html.Div([
+        html.Div(id='protein-circle', style={
+            'width': '250px', 'height': '250px', 'borderRadius': '50%',
+            'background': 'conic-gradient(#10b981 0% 54.17%, #1e293b 54.17% 100%)',
+            'margin': '0 auto', 'position': 'relative'
+        }),
+        html.Div(id='protein-text', style={'textAlign': 'center', 'fontSize': '2em', 'marginTop': '20px'}),
+        dbc.Button("Gericht hinzufügen", color="success", id="add-meal-btn",
+                   className="d-block mx-auto mt-4", style={'fontSize': '1.75em', 'padding': '0.75rem 2rem'}),
+    ], style={'display': 'flex', 'flexDirection': 'column', 'alignItems': 'center', 'justifyContent': 'center'}),
+
+    dbc.Modal([
+        dbc.ModalHeader("Gericht hinzufügen", close_button=True),
+        dbc.ModalBody([
+            dcc.Dropdown(
+                id='meal-select',
+                options=all_meals,  # Pass all options statically here
+                placeholder="Gericht auswählen",
+                style={'fontSize': '1.5em', 'marginBottom': '20px', 'color': 'black'},
+                searchable=True,
+                clearable=True
+            ),
+            dbc.Button("Hinzufügen", id="confirm-meal-btn", color="success", className="w-100", style={'fontSize': '1.5em'})
+        ])
+    ], id="meal-modal", is_open=False, centered=True, size="lg"),
+
+    dbc.Modal([
+        dbc.ModalHeader("Fast geschafft!", close_button=True),
+        dbc.ModalBody([
+            html.Div(id='timer-circle', style={
+                'width': '150px', 'height': '150px', 'borderRadius': '50%',
+                'background': 'conic-gradient(#10b981 0% 100%, #1e293b 100% 100%)',
+                'margin': '20px auto', 'position': 'relative'
+            }),
+            html.P("Du hast noch 5 Minuten für das Tagesziel!", className="text-center", style={'fontSize': '1.2em'}),
+            dcc.Interval(id='timer-interval', interval=100, n_intervals=0, disabled=True)
+        ])
+    ], id="timer-modal", is_open=False, centered=True, size="lg"),
+
+    html.Div([
+        html.H5("🛠 Timer anpassen", style={'textAlign': 'center'}),
+        dcc.Input(
+            id='timer-input',
+            type='number',
+            value=DEFAULT_TIMER,
+            placeholder='Zeit in Sekunden',
+            min=10, max=1800,
+            style={'width': '200px', 'margin': '0 auto', 'display': 'block', 'textAlign': 'center'}
+        )
+    ], style={'marginTop': '100vh', 'paddingBottom': '200px'}),
+
+    html.Div([
+        dbc.Nav([
+            dbc.NavLink([html.I(className="fas fa-utensils me-2"), "Essen"], href="#", active=True),
+            dbc.NavLink([html.I(className="fas fa-dumbbell me-2"), "Gewichte"], href="#"),
+            dbc.NavLink([html.I(className="fas fa-user me-2"), "Profil"], href="#"),
+        ], pills=True, justified=True)
+    ], style={
+        "position": "fixed", "bottom": "0", "left": "0", "width": "100%",
+        "backgroundColor": "#1e293b", "padding": "0.5rem 0",
+        "boxShadow": "0 -2px 5px rgba(0,0,0,0.3)", "zIndex": "1000"
+    }),
+
+    # Store to hold protein count
+    dcc.Store(id="protein-store", data={"value": 65}),
+    # Store to hold timer data
+    dcc.Store(id="custom-timer", data={"total": DEFAULT_TIMER}),
+], fluid=True, style={'backgroundColor': '#0a0f1f', 'color': '#f8fafc', 'minHeight': '100vh'})
+
+
+@app.callback(
+    [Output('protein-circle', 'style'),
+     Output('protein-text', 'children'),
+     Output('meal-modal', 'is_open'),
+     Output('timer-modal', 'is_open'),
+     Output('timer-interval', 'disabled'),
+     Output('protein-store', 'data')],
+    [Input('add-meal-btn', 'n_clicks'),
+     Input('confirm-meal-btn', 'n_clicks')],
+    [State('meal-select', 'value'),
+     State('protein-store', 'data')]
+)
+def handle_meal(add_clicks, confirm_clicks, meal, store):
+    protein = store.get("value", 0)
+    trigger = dash.callback_context.triggered_id
+
+    if trigger == 'add-meal-btn':
+        return dash.no_update, f'{protein}/{PROTEIN_GOAL}g', True, False, True, store
+
+    if trigger == 'confirm-meal-btn' and meal == 'Proteinshake':
+        if protein < MAX_PROTEIN - 1:
+            protein = min(MAX_PROTEIN, protein + 54)
+        store = {"value": protein}
+
+    progress = min(100, (protein / PROTEIN_GOAL) * 100)
+    circle_style = {
+        'width': '200px', 'height': '200px', 'borderRadius': '50%',
+        'background': f'conic-gradient(#10b981 0% {progress}%, #1e293b {progress}% 100%)',
+        'margin': '0 auto', 'position': 'relative'
     }
-if "selected_snack" not in st.session_state:
-    st.session_state.selected_snack = ""
-if "show_popup" not in st.session_state:
-    st.session_state.show_popup = False
 
-# ------------- Constants -------------
-snack_options = {
-    "Protein Shake": {"Calories": 550, "Carbs": 155, "Protein": 54, "Fat": 35},
-    "Apple": {"Calories": 95, "Carbs": 25, "Protein": 0, "Fat": 0},
-    "Peanut Butter": {"Calories": 190, "Carbs": 7, "Protein": 8, "Fat": 16},
-}
-macro_goals = {"Calories": 2000, "Carbs": 300, "Protein": 150, "Fat": 80}
+    show_modal = protein >= 119  # Trigger at 119 or more
+    return circle_style, f'{protein}/{PROTEIN_GOAL}g', False, show_modal, not show_modal, store
 
-# ------------- Helper Functions -------------
-def compute_totals(meals):
-    total = {"Calories": 0, "Carbs": 0, "Protein": 0, "Fat": 0}
-    for meal in meals.values():
-        for k in total:
-            total[k] += meal.get(k, 0)
-    return total
 
-def add_snack():
-    snack_name = st.session_state.selected_snack
-    if not snack_name:
-        return
-    st.session_state.meals["Snack"] = {
-        **snack_options[snack_name],
-        "Time": "3:00 PM",
-        "Details": snack_name
+@app.callback(
+    [Output('timer-circle', 'style'),
+     Output('timer-circle', 'children'),
+     Output('custom-timer', 'data'),
+     Output('timer-interval', 'disabled', allow_duplicate=True)],
+    [Input('timer-interval', 'n_intervals'),
+     Input('timer-input', 'value')],
+    [State('custom-timer', 'data')],
+    prevent_initial_call='initial_duplicate'
+)
+def update_timer(n, custom_time, timer_data):
+    total_for_progress = DEFAULT_TIMER  # 300 seconds for the progress circle
+
+    countdown_duration = custom_time if custom_time else timer_data.get("total", DEFAULT_TIMER)
+    time_left = max(0, countdown_duration - n * 0.1)
+
+    # Calculate percent relative to 300 seconds, not the countdown duration
+    percent = (time_left / total_for_progress) * 100
+    percent = max(0, min(100, percent))  # Clamp between 0 and 100 just in case
+
+    style = {
+        'width': '150px', 'height': '150px', 'borderRadius': '50%',
+        'background': f'conic-gradient(#10b981 0% {percent}%, #1e293b {percent}% 100%)',
+        'margin': '20px auto', 'position': 'relative'
     }
-    totals = compute_totals(st.session_state.meals)
-    if abs(totals["Protein"] - macro_goals["Protein"]) == 1:
-        st.session_state.show_popup = True
 
-def close_popup():
-    st.session_state.show_popup = False
-    st.session_state.selected_snack = ""
+    time_text = html.Div(
+        f'{math.floor(time_left / 60)}:{int(time_left % 60):02d}',
+        style={'position': 'absolute', 'top': '50%', 'left': '50%',
+               'transform': 'translate(-50%, -50%)', 'fontSize': '1.2em'}
+    )
 
-# ------------- Styles -------------
-st.markdown("""
-<style>
-.stApp > header, .stApp [data-testid="stToolbar"] {
-    display: none !important;
-}
-
-html, body, .main, [class^="css"], .stApp {
-    background-color: #0a0f1f !important;
-    color: #f8fafc !important;
-    padding: 0 !important;
-    margin: 0 !important;
-    padding-bottom: 60px !important;
-}
-
-.kpis-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    gap: 1rem;
-    margin-bottom: 1rem;
-}
-
-.kpi-box {
-    background: #1e293b;
-    border-radius: 12px;
-    padding: 1rem;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.3);
-}
-.kpi-box:hover {
-    box-shadow: 0 4px 10px rgba(0,0,0,0.4);
-}
-
-.meals-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    gap: 1rem;
-    margin-bottom: 1rem;
-}
-
-.meal-card {
-    background: #1e293b;
-    border-left: 4px solid #10b981;
-    padding: 1rem;
-    border-radius: 10px;
-}
-
-.progress {
-    height: 8px;
-    background: #334155;
-    border-radius: 10px;
-    overflow: hidden;
-}
-.progress > div {
-    height: 100%;
-    background: linear-gradient(90deg, #10b981, #22c55e);
-}
-
-.popup-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0,0,0,0.7);
-    z-index: 999;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-}
-
-.popup-box {
-    background: #1e293b;
-    padding: 2rem;
-    border-radius: 15px;
-    color: #10b981;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-    text-align: center;
-    position: relative;
-    z-index: 1001;
-}
-
-.popup-box button {
-    margin-top: 1rem;
-    background: #10b981;
-    color: white;
-    border: none;
-    padding: 0.5rem 1rem;
-    border-radius: 8px;
-    cursor: pointer;
-}
-
-.bottom-nav {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    background: #1e293b;
-    display: flex;
-    justify-content: space-around;
-    padding: 0.5rem 0;
-    z-index: 1000;
-    box-shadow: 0 -2px 5px rgba(0,0,0,0.3);
-}
-
-.nav-item {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    color: #f8fafc;
-    text-decoration: none;
-    font-size: 0.9rem;
-}
-
-.nav-item.active {
-    color: #10b981;
-}
-
-.nav-item svg {
-    width: 24px;
-    height: 24px;
-    margin-bottom: 0.2rem;
-}
-</style>
-<script>
-document.addEventListener('click', function(e) {
-    const popupBox = document.querySelector('.popup-box');
-    if (popupBox && !popupBox.contains(e.target)) {
-        const streamlitEvent = new Event("streamlit:close_popup");
-        document.dispatchEvent(streamlitEvent);
-    }
-});
-</script>
-""", unsafe_allow_html=True)
-
-# ------------- UI -------------
-st.title("Gerich Hinzufügen")
-st.subheader("Mittwoch, 2. Juli")
-
-# KPIs
-# KPIs
-st.markdown("### 🧮 Nährwerte")
-
-totals = compute_totals(st.session_state.meals)
-kpi_items = [
-    ("Kalorien", "Calories", "kcal"),
-    ("Protein", "Protein", "g"),
-    ("Kohlenhydrate", "Carbs", "g"),
-    ("Fett", "Fat", "g")
-]
-
-# Render KPIs in rows of 2 columns each
-for i in range(0, len(kpi_items), 2):
-    cols = st.columns(2)
-    for col, (label, key, unit) in zip(cols, kpi_items[i:i+2]):
-        value = totals[key]
-        goal = macro_goals[key]
-        percent = min(100, int(value / goal * 100)) if goal else 0
-        col.markdown(f"""
-        <div class="kpi-box" style="min-width: 150px;">
-            <strong>{label}</strong><br>
-            {value} / {goal} {unit}
-            <div class="progress"><div style="width:{percent}%"></div></div>
-        </div>
-        """, unsafe_allow_html=True)
+    return style, time_text, {"total": countdown_duration}, False if time_left > 0 else True
 
 
-# Meals
-st.markdown("### 🍽️ Mahlzeiten")
-st.markdown('<div class="meals-grid">', unsafe_allow_html=True)
-for name, data in st.session_state.meals.items():
-    st.markdown(f"""
-    <div class="meal-card">
-        <strong>{name}</strong> – {data["Time"]}<br>
-        <em>{data["Details"]}</em><br>
-        {data["Calories"]} kcal | {data["Carbs"]}g C | {data["Protein"]}g P | {data["Fat"]}g F
-    </div>
-    """, unsafe_allow_html=True)
-st.markdown('</div>', unsafe_allow_html=True)
-
-# Snack Selector
-st.markdown("### ➕ Gericht hinzufügen")
-st.selectbox("", [""] + list(snack_options.keys()), key="selected_snack", on_change=add_snack)
-
-# Popup
-if st.session_state.show_popup:
-    st.markdown(f"""
-    <div class="popup-overlay">
-        <div class="popup-box">
-            🎯 Du bist 1g vom Protein-Ziel entfernt, starke Leistung!
-            <button onclick="this.closest('.popup-overlay').style.display='none';">Schließen</button>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # JavaScript for popup close
-    js_event = """
-    <script>
-    document.addEventListener("streamlit:close_popup", function() {
-        fetch("/", {method: "POST", body: JSON.stringify({type: "close_popup"})});
-    });
-    </script>
-    """
-    st.markdown(js_event, unsafe_allow_html=True)
-
-    # Handle close event
-    if st.experimental_get_query_params().get("event") == ["close_popup"]:
-        close_popup()
-        st.rerun()
-
-# Bottom Navigation
-st.markdown("""
-<div class="bottom-nav">
-    <div class="nav-item active">
-        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 4h16v2H4zm0 4h16v12H4zm6 4h4v4h-4z"/></svg>
-        Food
-    </div>
-    <div class="nav-item">
-        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 100 20 10 10 0 000-20zm0 18a8 8 0 110-16 8 8 0 010 16zm4-8h-3V9h-2v3H8v2h3v3h2v-3h3z"/></svg>
-        Weights
-    </div>
-    <div class="nav-item">
-        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
-        Profile
-    </div>
-</div>
-""", unsafe_allow_html=True)
+if __name__ == '__main__':
+    app.run(debug=False, host='0.0.0.0', port=8050)
