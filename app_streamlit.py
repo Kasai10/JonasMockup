@@ -1,5 +1,5 @@
 import dash
-from dash import html, dcc, Input, Output, State
+from dash import html, dcc, Input, Output, State, callback_context
 import dash_bootstrap_components as dbc
 import math
 
@@ -30,7 +30,6 @@ app.layout = dbc.Container([
             'background': 'conic-gradient(#10b981 0% 54.17%, #1e293b 54.17% 100%)',
             'margin': '0 auto', 'position': 'relative'
         }),
-        html.Div(id='protein-text', style={'textAlign': 'center', 'fontSize': '2em', 'marginTop': '20px'}),
         dbc.Button("Gericht hinzufügen", color="success", id="add-meal-btn",
                    className="d-block mx-auto mt-4", style={'fontSize': '1.75em', 'padding': '0.75rem 2rem'}),
     ], style={'display': 'flex', 'flexDirection': 'column', 'alignItems': 'center', 'justifyContent': 'center'}),
@@ -40,7 +39,7 @@ app.layout = dbc.Container([
         dbc.ModalBody([
             dcc.Dropdown(
                 id='meal-select',
-                options=all_meals,  # Pass all options statically here
+                options=all_meals,
                 placeholder="Gericht auswählen",
                 style={'fontSize': '1.5em', 'marginBottom': '20px', 'color': 'black'},
                 searchable=True,
@@ -87,20 +86,20 @@ app.layout = dbc.Container([
         "boxShadow": "0 -2px 5px rgba(0,0,0,0.3)", "zIndex": "1000"
     }),
 
-    # Store to hold protein count
     dcc.Store(id="protein-store", data={"value": 65}),
-    # Store to hold timer data
     dcc.Store(id="custom-timer", data={"total": DEFAULT_TIMER}),
 ], fluid=True, style={'backgroundColor': '#0a0f1f', 'color': '#f8fafc', 'minHeight': '100vh'})
 
 
 @app.callback(
-    [Output('protein-circle', 'style'),
-     Output('protein-text', 'children'),
-     Output('meal-modal', 'is_open'),
-     Output('timer-modal', 'is_open'),
-     Output('timer-interval', 'disabled'),
-     Output('protein-store', 'data')],
+    [
+        Output('protein-circle', 'style'),
+        Output('protein-circle', 'children'),
+        Output('meal-modal', 'is_open'),
+        Output('timer-modal', 'is_open'),
+        Output('timer-interval', 'disabled'),
+        Output('protein-store', 'data')
+    ],
     [Input('add-meal-btn', 'n_clicks'),
      Input('confirm-meal-btn', 'n_clicks')],
     [State('meal-select', 'value'),
@@ -108,46 +107,84 @@ app.layout = dbc.Container([
 )
 def handle_meal(add_clicks, confirm_clicks, meal, store):
     protein = store.get("value", 0)
-    trigger = dash.callback_context.triggered_id
+    trigger = callback_context.triggered_id
 
     if trigger == 'add-meal-btn':
-        return dash.no_update, f'{protein}/{PROTEIN_GOAL}g', True, False, True, store
+        progress = min(100, (protein / PROTEIN_GOAL) * 100)
+        style = {
+            'width': '200px', 'height': '200px', 'borderRadius': '50%',
+            'background': f'conic-gradient(#10b981 0% {progress}%, #1e293b {progress}% 100%)',
+            'margin': '0 auto', 'position': 'relative'
+        }
+        children = html.Div([
+            html.Div(style={
+                'position': 'absolute',
+                'top': '50%', 'left': '50%',
+                'transform': 'translate(-50%, -50%)',
+                'width': '110px', 'height': '110px',
+                'borderRadius': '50%',
+                'backgroundColor': '#0a0f1f',
+            }),
+            html.Div(f'{protein}/{PROTEIN_GOAL}g', style={
+                'position': 'absolute',
+                'top': '50%', 'left': '50%',
+                'transform': 'translate(-50%, -50%)',
+                'fontSize': '1.5em', 'color': '#f8fafc'
+            })
+        ])
+        return style, children, True, False, True, store
 
     if trigger == 'confirm-meal-btn' and meal == 'Proteinshake':
-        if protein < MAX_PROTEIN - 1:
+        if protein < MAX_PROTEIN:
             protein = min(MAX_PROTEIN, protein + 54)
         store = {"value": protein}
 
     progress = min(100, (protein / PROTEIN_GOAL) * 100)
-    circle_style = {
+    style = {
         'width': '200px', 'height': '200px', 'borderRadius': '50%',
         'background': f'conic-gradient(#10b981 0% {progress}%, #1e293b {progress}% 100%)',
         'margin': '0 auto', 'position': 'relative'
     }
+    children = html.Div([
+        html.Div(style={
+            'position': 'absolute',
+            'top': '50%', 'left': '50%',
+            'transform': 'translate(-50%, -50%)',
+            'width': '110px', 'height': '110px',
+            'borderRadius': '50%',
+            'backgroundColor': '#0a0f1f'
+        }),
+        html.Div(f'{protein}/{PROTEIN_GOAL}g', style={
+            'position': 'absolute',
+            'top': '50%', 'left': '50%',
+            'transform': 'translate(-50%, -50%)',
+            'fontSize': '1.5em', 'color': '#f8fafc'
+        })
+    ])
 
-    show_modal = protein >= 119  # Trigger at 119 or more
-    return circle_style, f'{protein}/{PROTEIN_GOAL}g', False, show_modal, not show_modal, store
+    show_modal = protein >= 119
+    return style, children, False, show_modal, not show_modal, store
 
 
 @app.callback(
-    [Output('timer-circle', 'style'),
-     Output('timer-circle', 'children'),
-     Output('custom-timer', 'data'),
-     Output('timer-interval', 'disabled', allow_duplicate=True)],
+    [
+        Output('timer-circle', 'style'),
+        Output('timer-circle', 'children'),
+        Output('custom-timer', 'data'),
+        Output('timer-interval', 'disabled', allow_duplicate=True)
+    ],
     [Input('timer-interval', 'n_intervals'),
      Input('timer-input', 'value')],
     [State('custom-timer', 'data')],
     prevent_initial_call='initial_duplicate'
 )
 def update_timer(n, custom_time, timer_data):
-    total_for_progress = DEFAULT_TIMER  # 300 seconds for the progress circle
-
+    total_for_progress = DEFAULT_TIMER
     countdown_duration = custom_time if custom_time else timer_data.get("total", DEFAULT_TIMER)
     time_left = max(0, countdown_duration - n * 0.1)
 
-    # Calculate percent relative to 300 seconds, not the countdown duration
     percent = (time_left / total_for_progress) * 100
-    percent = max(0, min(100, percent))  # Clamp between 0 and 100 just in case
+    percent = max(0, min(100, percent))
 
     style = {
         'width': '150px', 'height': '150px', 'borderRadius': '50%',
@@ -155,14 +192,28 @@ def update_timer(n, custom_time, timer_data):
         'margin': '20px auto', 'position': 'relative'
     }
 
-    time_text = html.Div(
-        f'{math.floor(time_left / 60)}:{int(time_left % 60):02d}',
-        style={'position': 'absolute', 'top': '50%', 'left': '50%',
-               'transform': 'translate(-50%, -50%)', 'fontSize': '1.2em'}
-    )
+    time_text = html.Div([
+        html.Div(style={
+            'position': 'absolute',
+            'top': '50%', 'left': '50%',
+            'transform': 'translate(-50%, -50%)',
+            'width': '110px', 'height': '110px',
+            'borderRadius': '50%',
+            'backgroundColor': '#0a0f1f'
+        }),
+        html.Div(
+            f'{math.floor(time_left / 60)}:{int(time_left % 60):02d}',
+            style={
+                'position': 'absolute',
+                'top': '50%', 'left': '50%',
+                'transform': 'translate(-50%, -50%)',
+                'fontSize': '1.2em', 'color': '#f8fafc'
+            }
+        )
+    ])
 
     return style, time_text, {"total": countdown_duration}, False if time_left > 0 else True
 
 
 if __name__ == '__main__':
-    app.run(debug=False, host='0.0.0.0', port=8050)
+    app.run(debug=True, host='0.0.0.0', port=8050)
