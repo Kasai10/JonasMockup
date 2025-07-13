@@ -1,0 +1,70 @@
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.dropdown-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.kpi-box {
+  background-color: #1e293b;
+  padding: 0.75rem;
+  border-radius: 10px;
+  color: #f8fafc;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+  min-width: 120px;
+}
+
+.kpi-box:hover {
+  box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+}
+
+.progress {
+  height: 6px;
+  background: #334155;
+  border-radius: 8px;
+  overflow: hidden;
+  margin-top: 0.5rem;
+}
+
+.progress > div {
+  height: 100%;
+  background: linear-gradient(90deg, #10b981, #22c55e);
+}
+
+/* Mobile-specific styles */
+@media (max-width: 576px) {
+  h1 {
+    font-size: 1.5rem;
+  }
+  h3 {
+    font-size: 1.2rem;
+  }
+  h5 {
+    font-size: 1rem;
+  }
+  .kpi-box {
+    padding: 0.5rem;
+    min-width: 100px;
+    font-size: 0.9rem;
+  }
+  .progress {
+    height: 5px;
+  }
+  .dropdown-grid {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
+  .Select-control, .Select-menu-outer {
+    font-size: 0.9rem !important;
+  }
+  #popup-toast {
+    width: 280px !important;
+  }
+}
