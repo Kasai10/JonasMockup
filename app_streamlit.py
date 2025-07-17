@@ -3,6 +3,7 @@ from dash import html, dcc, Input, Output, State, callback_context
 import dash_bootstrap_components as dbc
 import math
 import time
+import uuid
 
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.DARKLY])
 
@@ -50,14 +51,22 @@ app.layout = dbc.Container([
     ], id="meal-modal", is_open=False, centered=True, size="lg"),
 
     dbc.Modal([
-        dbc.ModalHeader("Fast geschafft!", close_button=True),
+        dbc.ModalHeader(
+            "Fast geschafft!",
+            close_button=True,
+            style={'textAlign': 'center', 'fontWeight': 'bold', 'fontSize': '1.5em', 'width': '100%'}
+        ),
         dbc.ModalBody([
             html.Div(id='timer-circle', style={
                 'width': '150px', 'height': '150px', 'borderRadius': '50%',
                 'background': 'conic-gradient(#10b981 0% 100%, #1e293b 100% 100%)',
                 'margin': '20px auto', 'position': 'relative'
             }),
-            html.P("Du hast noch 5 Minuten für das Tagesziel!", className="text-center", style={'fontSize': '1.2em'}),
+            html.P(
+            "Du hast noch 5 Minuten für dein Tagesziel!",
+            className="text-center",
+            style={'fontSize': '1.75em', 'fontWeight': 'bold'}
+        ),
             dcc.Interval(id='timer-interval', interval=100, n_intervals=0, disabled=True)
         ])
     ], id="timer-modal", is_open=False, centered=True, size="lg"),
@@ -178,14 +187,16 @@ def handle_meal(add_clicks, confirm_clicks, meal, store):
     ])
 
     enable_delay = protein >= 119
-    return style, children, False, not enable_delay, not enable_delay, store
+    return style, children, False, not enable_delay, True, store  # Keep timer disabled until modal opens
 
 
 @app.callback(
     [
         Output('timer-modal', 'is_open'),
         Output('modal-delay-interval', 'disabled', allow_duplicate=True),
-        Output('modal-delay-interval', 'n_intervals')
+        Output('modal-delay-interval', 'n_intervals'),
+        Output('timer-interval', 'disabled', allow_duplicate=True),
+        Output('timer-start-timestamp', 'data', allow_duplicate=True)
     ],
     [Input('modal-delay-interval', 'n_intervals')],
     [State('timer-modal', 'is_open')],
@@ -193,8 +204,9 @@ def handle_meal(add_clicks, confirm_clicks, meal, store):
 )
 def open_timer_modal(n_intervals, is_open):
     if n_intervals > 0 and not is_open:
-        return True, True, 0  # Open modal, disable interval, reset n_intervals
-    return is_open, True, 0  # Keep modal state, ensure interval is disabled
+        # Start the timer when the modal opens by enabling timer-interval and setting start timestamp
+        return True, True, 0, False, time.time()  # Open modal, disable delay interval, reset n_intervals, enable timer, set start time
+    return is_open, True, 0, True, None  # Keep modal state, ensure delay interval is disabled, keep timer disabled
 
 
 @app.callback(
@@ -203,7 +215,7 @@ def open_timer_modal(n_intervals, is_open):
         Output('timer-circle', 'children'),
         Output('custom-timer', 'data'),
         Output('timer-interval', 'disabled', allow_duplicate=True),
-        Output('timer-start-timestamp', 'data'),
+        Output('timer-start-timestamp', 'data', allow_duplicate=True),
     ],
     [
         Input('timer-interval', 'n_intervals'),
@@ -222,22 +234,22 @@ def update_timer(n_intervals, input_time, timer_data, start_timestamp):
     # Always use DEFAULT_TIMER for total duration to keep color logic consistent
     total_duration = DEFAULT_TIMER
 
-    # Check if timer is just starting or input time has changed
+    # Initialize timer data if not set
+    if timer_data is None:
+        timer_data = {"total": DEFAULT_TIMER}
+
+    # If there's no start timestamp or input time has changed significantly
     if start_timestamp is None or (input_time and abs(timer_data.get("total", DEFAULT_TIMER) - input_time) > 1):
-        # Initialize or reset timer with new input time
-        initial_time = input_time if input_time is not None else DEFAULT_TIMER
-        # Calculate effective elapsed time to simulate progress
-        effective_elapsed = DEFAULT_TIMER - initial_time
-        # Set start_timestamp to simulate that effective_elapsed time has passed
-        start_timestamp = now - effective_elapsed
-        # Update stored total to reflect input_time
-        timer_data = {"total": initial_time}
+        # Use input time or default for total duration
+        timer_data = {"total": input_time if input_time is not None else DEFAULT_TIMER}
+        # If timer is running (start_timestamp is None means timer hasn't started), don't reset start time
+        start_timestamp = start_timestamp or now
 
     # Calculate elapsed time since start
-    elapsed = now - start_timestamp
+    elapsed = now - start_timestamp if start_timestamp else 0
 
     # Calculate time left
-    time_left = max(0, total_duration - elapsed)
+    time_left = max(0, timer_data.get("total", DEFAULT_TIMER) - elapsed)
 
     # Calculate progress percentage
     percent = (time_left / total_duration) * 100 if total_duration else 0
@@ -283,4 +295,4 @@ def update_timer(n_intervals, input_time, timer_data, start_timestamp):
 
 
 if __name__ == '__main__':
-    app.run(debug=False, host='0.0.0.0', port=8050)
+    app.run(debug=True, host='0.0.0.0', port=8050)
