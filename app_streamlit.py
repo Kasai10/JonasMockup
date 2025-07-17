@@ -294,4 +294,9 @@ def update_timer(n_intervals, input_time, timer_data, start_timestamp):
 
 
 if __name__ == '__main__':
-    app.run(debug=False, host='0.0.0.0', port=8050)
+    app.run_server(
+        host='0.0.0.0',
+        port=8050,
+        ssl_cert='certs/cert.pem',
+        ssl_key='certs/key.pem'
+    )
