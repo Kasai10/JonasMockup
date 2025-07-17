@@ -188,9 +188,17 @@ def update_timer(n, custom_time, timer_data):
     percent = (time_left / total_for_progress) * 100
     percent = max(0, min(100, percent))
 
+    # Color logic: green > yellow > red
+    if time_left > countdown_duration * 2 / 3:
+        color = "#10b981"  # Green
+    elif time_left > countdown_duration * 1 / 3:
+        color = "#eab308"  # Yellow
+    else:
+        color = "#ef4444"  # Red
+
     style = {
         'width': '150px', 'height': '150px', 'borderRadius': '50%',
-        'background': f'conic-gradient(#10b981 0% {percent}%, #1e293b {percent}% 100%)',
+        'background': f'conic-gradient({color} 0% {percent}%, #1e293b {percent}% 100%)',
         'margin': '20px auto', 'position': 'relative'
     }
 
