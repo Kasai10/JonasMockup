@@ -2,15 +2,15 @@ import dash
 from dash import html, dcc, Input, Output, State, callback_context
 import dash_bootstrap_components as dbc
 import math
+import time
 
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.DARKLY])
 
 # Constants
 PROTEIN_GOAL = 120
-MAX_PROTEIN = 120
-DEFAULT_TIMER = 300
+MAX_PROTEIN = 119
+DEFAULT_TIMER = 300  # in seconds
 
-# All meal options, Proteinshake is last in list for ordering
 all_meals = sorted([
     {'label': 'Hähnchenbrust', 'value': 'ChickenBreast'},
     {'label': 'Lachsfilet', 'value': 'SalmonFilet'},
@@ -88,6 +88,7 @@ app.layout = dbc.Container([
 
     dcc.Store(id="protein-store", data={"value": 65}),
     dcc.Store(id="custom-timer", data={"total": DEFAULT_TIMER}),
+    dcc.Store(id="timer-start-timestamp", data=None),  # Store when timer started
 ], fluid=True, style={'backgroundColor': '#0a0f1f', 'color': '#f8fafc', 'minHeight': '100vh'})
 
 
@@ -135,9 +136,20 @@ def handle_meal(add_clicks, confirm_clicks, meal, store):
         ])
         return style, children, True, False, True, store
 
-    if trigger == 'confirm-meal-btn' and meal == 'Proteinshake':
+    if trigger == 'confirm-meal-btn' and meal:
+        # Add protein amount per meal, hardcoded example
+        meal_protein_map = {
+            'Proteinshake': 54,
+            'ChickenBreast': 30,
+            'SalmonFilet': 25,
+            'Quark': 20,
+            'Beef': 40,
+            'Tofu': 15,
+            'Eggs': 12
+        }
+        add_protein = meal_protein_map.get(meal, 0)
         if protein < MAX_PROTEIN:
-            protein = min(MAX_PROTEIN, protein + 54)
+            protein = min(MAX_PROTEIN, protein + add_protein)
         store = {"value": protein}
 
     progress = min(100, (protein / PROTEIN_GOAL) * 100)
@@ -173,25 +185,51 @@ def handle_meal(add_clicks, confirm_clicks, meal, store):
         Output('timer-circle', 'style'),
         Output('timer-circle', 'children'),
         Output('custom-timer', 'data'),
-        Output('timer-interval', 'disabled', allow_duplicate=True)
+        Output('timer-interval', 'disabled', allow_duplicate=True),
+        Output('timer-start-timestamp', 'data'),
     ],
-    [Input('timer-interval', 'n_intervals'),
-     Input('timer-input', 'value')],
-    [State('custom-timer', 'data')],
+    [
+        Input('timer-interval', 'n_intervals'),
+        Input('timer-input', 'value'),
+    ],
+    [
+        State('custom-timer', 'data'),
+        State('timer-start-timestamp', 'data')
+    ],
     prevent_initial_call='initial_duplicate'
 )
-def update_timer(n, custom_time, timer_data):
-    total_for_progress = DEFAULT_TIMER
-    countdown_duration = custom_time if custom_time else timer_data.get("total", DEFAULT_TIMER)
-    time_left = max(0, countdown_duration - n * 0.1)
+def update_timer(n_intervals, input_time, timer_data, start_timestamp):
+    # Use current time for syncing timer
+    now = time.time()
 
-    percent = (time_left / total_for_progress) * 100
+    # Always use DEFAULT_TIMER for total duration to keep color logic consistent
+    total_duration = DEFAULT_TIMER
+
+    # Check if timer is just starting or input time has changed
+    if start_timestamp is None or (input_time and abs(timer_data.get("total", DEFAULT_TIMER) - input_time) > 1):
+        # Initialize or reset timer with new input time
+        initial_time = input_time if input_time is not None else DEFAULT_TIMER
+        # Calculate effective elapsed time to simulate progress
+        effective_elapsed = DEFAULT_TIMER - initial_time
+        # Set start_timestamp to simulate that effective_elapsed time has passed
+        start_timestamp = now - effective_elapsed
+        # Update stored total to reflect input_time
+        timer_data = {"total": initial_time}
+
+    # Calculate elapsed time since start
+    elapsed = now - start_timestamp
+
+    # Calculate time left
+    time_left = max(0, total_duration - elapsed)
+
+    # Calculate progress percentage
+    percent = (time_left / total_duration) * 100 if total_duration else 0
     percent = max(0, min(100, percent))
 
     # Color logic: green > yellow > red
-    if time_left > countdown_duration * 2 / 3:
+    if time_left > total_duration * 2 / 3:
         color = "#10b981"  # Green
-    elif time_left > countdown_duration * 1 / 3:
+    elif time_left > total_duration * 1 / 3:
         color = "#eab308"  # Yellow
     else:
         color = "#ef4444"  # Red
@@ -222,7 +260,9 @@ def update_timer(n, custom_time, timer_data):
         )
     ])
 
-    return style, time_text, {"total": countdown_duration}, False if time_left > 0 else True
+    timer_finished = time_left <= 0
+
+    return style, time_text, timer_data, timer_finished, start_timestamp
 
 
 if __name__ == '__main__':
