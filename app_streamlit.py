@@ -89,6 +89,7 @@ app.layout = dbc.Container([
     dcc.Store(id="protein-store", data={"value": 65}),
     dcc.Store(id="custom-timer", data={"total": DEFAULT_TIMER}),
     dcc.Store(id="timer-start-timestamp", data=None),  # Store when timer started
+    dcc.Interval(id='modal-delay-interval', interval=3000, n_intervals=0, disabled=True)  # 3-second delay for modal
 ], fluid=True, style={'backgroundColor': '#0a0f1f', 'color': '#f8fafc', 'minHeight': '100vh'})
 
 
@@ -97,7 +98,7 @@ app.layout = dbc.Container([
         Output('protein-circle', 'style'),
         Output('protein-circle', 'children'),
         Output('meal-modal', 'is_open'),
-        Output('timer-modal', 'is_open'),
+        Output('modal-delay-interval', 'disabled'),
         Output('timer-interval', 'disabled'),
         Output('protein-store', 'data')
     ],
@@ -134,7 +135,7 @@ def handle_meal(add_clicks, confirm_clicks, meal, store):
                 'fontSize': '1.5em', 'color': '#f8fafc'
             })
         ])
-        return style, children, True, False, True, store
+        return style, children, True, True, True, store
 
     if trigger == 'confirm-meal-btn' and meal:
         # Add protein amount per meal, hardcoded example
@@ -176,8 +177,24 @@ def handle_meal(add_clicks, confirm_clicks, meal, store):
         })
     ])
 
-    show_modal = protein >= 119
-    return style, children, False, show_modal, not show_modal, store
+    enable_delay = protein >= 119
+    return style, children, False, not enable_delay, not enable_delay, store
+
+
+@app.callback(
+    [
+        Output('timer-modal', 'is_open'),
+        Output('modal-delay-interval', 'disabled', allow_duplicate=True),
+        Output('modal-delay-interval', 'n_intervals')
+    ],
+    [Input('modal-delay-interval', 'n_intervals')],
+    [State('timer-modal', 'is_open')],
+    prevent_initial_call='initial_duplicate'
+)
+def open_timer_modal(n_intervals, is_open):
+    if n_intervals > 0 and not is_open:
+        return True, True, 0  # Open modal, disable interval, reset n_intervals
+    return is_open, True, 0  # Keep modal state, ensure interval is disabled
 
 
 @app.callback(
