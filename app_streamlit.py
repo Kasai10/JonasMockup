@@ -63,10 +63,10 @@ app.layout = dbc.Container([
                 'margin': '20px auto', 'position': 'relative'
             }),
             html.P(
-            "Du hast noch 5 Minuten für dein Tagesziel!",
-            className="text-center",
-            style={'fontSize': '1.75em', 'fontWeight': 'bold'}
-        ),
+                "Du hast noch 5 Minuten für dein Tagesziel!",
+                className="text-center",
+                style={'fontSize': '1.75em', 'fontWeight': 'bold'}
+            ),
             dcc.Interval(id='timer-interval', interval=100, n_intervals=0, disabled=True)
         ])
     ], id="timer-modal", is_open=False, centered=True, size="lg"),
@@ -90,17 +90,16 @@ app.layout = dbc.Container([
             dbc.NavLink([html.I(className="fas fa-user me-2"), "Profil"], href="#"),
         ], pills=True, justified=True)
     ], style={
-        "position": "fixed", "bottom": "0", "left": "0", "width": "100%",
-        "backgroundColor": "#1e293b", "padding": "0.5rem 0",
-        "boxShadow": "0 -2px 5px rgba(0,0,0,0.3)", "zIndex": "1000"
+        'position': 'fixed', 'bottom': '0', 'left': '0', 'width': '100%',
+        'backgroundColor': '#1e293b', 'padding': '0.5rem 0',
+        'boxShadow': '0 -2px 5px rgba(0,0,0,0.3)', 'zIndex': '1000'
     }),
 
     dcc.Store(id="protein-store", data={"value": 65}),
     dcc.Store(id="custom-timer", data={"total": DEFAULT_TIMER}),
     dcc.Store(id="timer-start-timestamp", data=None),  # Store when timer started
     dcc.Interval(id='modal-delay-interval', interval=3000, n_intervals=0, disabled=True)  # 3-second delay for modal
-], fluid=True, style={'backgroundColor': '#0a0f1f', 'color': '#f8fafc', 'minHeight': '100vh'})
-
+], fluid=True, style={'backgroundColor': '#0a0f1f', 'color': '#f8fafc', 'minHeight': '100vh', 'width': '100vw', 'margin': '0', 'padding': '0'})
 
 @app.callback(
     [
@@ -295,4 +294,4 @@ def update_timer(n_intervals, input_time, timer_data, start_timestamp):
 
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=8050)
+    app.run(debug=False, host='0.0.0.0', port=8050)

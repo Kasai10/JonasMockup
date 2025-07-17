@@ -11,6 +11,17 @@
   gap: 1rem;
   margin-bottom: 1rem;
 }
+html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background-color: #0a0f1f; /* your blue */
+}
+
+body > div:first-child {
+  min-height: 100vh;  /* Make sure Dash's root div fills viewport */
+  background-color: #0a0f1f; /* same blue */
+}
 
 .kpi-box {
   background-color: #1e293b;
