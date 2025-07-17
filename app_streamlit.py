@@ -27,7 +27,7 @@ app.layout = dbc.Container([
     html.Div([
         html.Div(id='protein-circle', style={
             'width': '250px', 'height': '250px', 'borderRadius': '50%',
-            'background': 'conic-gradient(#10b981 0% 54.17%, #1e293b 54.17% 100%)',
+            'background': 'conic-gradient(#eab308 0% 54.17%, #1e293b 54.17% 100%)',
             'margin': '0 auto', 'position': 'relative'
         }),
         dbc.Button("Gericht hinzufügen", color="success", id="add-meal-btn",
@@ -111,9 +111,10 @@ def handle_meal(add_clicks, confirm_clicks, meal, store):
 
     if trigger == 'add-meal-btn':
         progress = min(100, (protein / PROTEIN_GOAL) * 100)
+        color = "#eab308" if protein < 119 else "#10b981"
         style = {
             'width': '200px', 'height': '200px', 'borderRadius': '50%',
-            'background': f'conic-gradient(#10b981 0% {progress}%, #1e293b {progress}% 100%)',
+            'background': f'conic-gradient({color} 0% {progress}%, #1e293b {progress}% 100%)',
             'margin': '0 auto', 'position': 'relative'
         }
         children = html.Div([
@@ -140,9 +141,10 @@ def handle_meal(add_clicks, confirm_clicks, meal, store):
         store = {"value": protein}
 
     progress = min(100, (protein / PROTEIN_GOAL) * 100)
+    color = "#eab308" if protein < 119 else "#10b981"
     style = {
         'width': '200px', 'height': '200px', 'borderRadius': '50%',
-        'background': f'conic-gradient(#10b981 0% {progress}%, #1e293b {progress}% 100%)',
+        'background': f'conic-gradient({color} 0% {progress}%, #1e293b {progress}% 100%)',
         'margin': '0 auto', 'position': 'relative'
     }
     children = html.Div([
