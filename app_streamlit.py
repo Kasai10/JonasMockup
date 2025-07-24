@@ -71,6 +71,37 @@ app.layout = dbc.Container([
         ])
     ], id="timer-modal", is_open=False, centered=True, size="lg"),
 
+    dbc.Modal([
+        dbc.ModalHeader(
+            html.Div("Schade", style={
+                'position': 'absolute',
+                'left': '50%',
+                'transform': 'translateX(-50%)',
+                'fontWeight': 'bold',
+                'fontSize': '2em',
+                'width': '100%',
+                'textAlign': 'center'
+            }),
+            close_button=True
+        ),
+        dbc.ModalBody([
+            html.Div(
+                "😞",
+                style={
+                    'fontSize': '10em',
+                    'color': '#ef4444',
+                    'textAlign': 'center',
+                    'marginBottom': '30px'
+                }
+            ),
+            html.P(
+                "Tagesziel nicht erreicht!",
+                className="text-center",
+                style={'fontSize': '3.5em', 'fontWeight': 'bold', 'color': '#f8fafc'}
+            )
+        ])
+    ], id="failure-modal", is_open=False, centered=True, size="xl"),
+
     html.Div([
         html.H5("🛠 Timer anpassen", style={'textAlign': 'center'}),
         dcc.Input(
@@ -97,8 +128,8 @@ app.layout = dbc.Container([
 
     dcc.Store(id="protein-store", data={"value": 65}),
     dcc.Store(id="custom-timer", data={"total": DEFAULT_TIMER}),
-    dcc.Store(id="timer-start-timestamp", data=None),  # Store when timer started
-    dcc.Interval(id='modal-delay-interval', interval=3000, n_intervals=0, disabled=True)  # 3-second delay for modal
+    dcc.Store(id="timer-start-timestamp", data=None),
+    dcc.Interval(id='modal-delay-interval', interval=3000, n_intervals=0, disabled=True)
 ], fluid=True, style={'backgroundColor': '#0a0f1f', 'color': '#f8fafc', 'minHeight': '100vh', 'width': '100vw', 'margin': '0', 'padding': '0'})
 
 @app.callback(
@@ -146,7 +177,6 @@ def handle_meal(add_clicks, confirm_clicks, meal, store):
         return style, children, True, True, True, store
 
     if trigger == 'confirm-meal-btn' and meal:
-        # Add protein amount per meal, hardcoded example
         meal_protein_map = {
             'Proteinshake': 54,
             'ChickenBreast': 30,
@@ -186,8 +216,7 @@ def handle_meal(add_clicks, confirm_clicks, meal, store):
     ])
 
     enable_delay = protein >= 119
-    return style, children, False, not enable_delay, True, store  # Keep timer disabled until modal opens
-
+    return style, children, False, not enable_delay, True, store
 
 @app.callback(
     [
@@ -195,18 +224,18 @@ def handle_meal(add_clicks, confirm_clicks, meal, store):
         Output('modal-delay-interval', 'disabled', allow_duplicate=True),
         Output('modal-delay-interval', 'n_intervals'),
         Output('timer-interval', 'disabled', allow_duplicate=True),
-        Output('timer-start-timestamp', 'data', allow_duplicate=True)
+        Output('timer-start-timestamp', 'data', allow_duplicate=True),
+        Output('failure-modal', 'is_open')
     ],
     [Input('modal-delay-interval', 'n_intervals')],
-    [State('timer-modal', 'is_open')],
+    [State('timer-modal', 'is_open'),
+     State('failure-modal', 'is_open')],
     prevent_initial_call='initial_duplicate'
 )
-def open_timer_modal(n_intervals, is_open):
-    if n_intervals > 0 and not is_open:
-        # Start the timer when the modal opens by enabling timer-interval and setting start timestamp
-        return True, True, 0, False, time.time()  # Open modal, disable delay interval, reset n_intervals, enable timer, set start time
-    return is_open, True, 0, True, None  # Keep modal state, ensure delay interval is disabled, keep timer disabled
-
+def open_timer_modal(n_intervals, timer_is_open, failure_is_open):
+    if n_intervals > 0 and not timer_is_open and not failure_is_open:
+        return True, True, 0, False, time.time(), False
+    return timer_is_open, True, 0, True, None, failure_is_open
 
 @app.callback(
     [
@@ -215,6 +244,8 @@ def open_timer_modal(n_intervals, is_open):
         Output('custom-timer', 'data'),
         Output('timer-interval', 'disabled', allow_duplicate=True),
         Output('timer-start-timestamp', 'data', allow_duplicate=True),
+        Output('timer-modal', 'is_open', allow_duplicate=True),
+        Output('failure-modal', 'is_open', allow_duplicate=True)
     ],
     [
         Input('timer-interval', 'n_intervals'),
@@ -222,45 +253,34 @@ def open_timer_modal(n_intervals, is_open):
     ],
     [
         State('custom-timer', 'data'),
-        State('timer-start-timestamp', 'data')
+        State('timer-start-timestamp', 'data'),
+        State('timer-modal', 'is_open'),
+        State('failure-modal', 'is_open')
     ],
     prevent_initial_call='initial_duplicate'
 )
-def update_timer(n_intervals, input_time, timer_data, start_timestamp):
-    # Use current time for syncing timer
+def update_timer(n_intervals, input_time, timer_data, start_timestamp, timer_modal_open, failure_modal_open):
     now = time.time()
-
-    # Always use DEFAULT_TIMER for total duration to keep color logic consistent
     total_duration = DEFAULT_TIMER
 
-    # Initialize timer data if not set
     if timer_data is None:
         timer_data = {"total": DEFAULT_TIMER}
 
-    # If there's no start timestamp or input time has changed significantly
     if start_timestamp is None or (input_time and abs(timer_data.get("total", DEFAULT_TIMER) - input_time) > 1):
-        # Use input time or default for total duration
         timer_data = {"total": input_time if input_time is not None else DEFAULT_TIMER}
-        # If timer is running (start_timestamp is None means timer hasn't started), don't reset start time
         start_timestamp = start_timestamp or now
 
-    # Calculate elapsed time since start
     elapsed = now - start_timestamp if start_timestamp else 0
-
-    # Calculate time left
     time_left = max(0, timer_data.get("total", DEFAULT_TIMER) - elapsed)
-
-    # Calculate progress percentage
     percent = (time_left / total_duration) * 100 if total_duration else 0
     percent = max(0, min(100, percent))
 
-    # Color logic: green > yellow > red
     if time_left > total_duration * 2 / 3:
-        color = "#10b981"  # Green
+        color = "#10b981"
     elif time_left > total_duration * 1 / 3:
-        color = "#eab308"  # Yellow
+        color = "#eab308"
     else:
-        color = "#ef4444"  # Red
+        color = "#ef4444"
 
     style = {
         'width': '150px', 'height': '150px', 'borderRadius': '50%',
@@ -289,9 +309,10 @@ def update_timer(n_intervals, input_time, timer_data, start_timestamp):
     ])
 
     timer_finished = time_left <= 0
+    failure_modal = timer_finished and not failure_modal_open
+    timer_modal = timer_modal_open and not timer_finished
 
-    return style, time_text, timer_data, timer_finished, start_timestamp
-
+    return style, time_text, timer_data, timer_finished, start_timestamp, timer_modal, failure_modal
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8050)
