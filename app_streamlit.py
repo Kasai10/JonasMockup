@@ -73,16 +73,9 @@ app.layout = dbc.Container([
 
     dbc.Modal([
         dbc.ModalHeader(
-            html.Div("Schade", style={
-                'position': 'absolute',
-                'left': '50%',
-                'transform': 'translateX(-50%)',
-                'fontWeight': 'bold',
-                'fontSize': '2em',
-                'width': '100%',
-                'textAlign': 'center'
-            }),
-            close_button=True
+            " ",
+            close_button=True,
+            style={'textAlign': 'center', 'fontWeight': 'bold', 'fontSize': '2em', 'width': '100%'}
         ),
         dbc.ModalBody([
             html.Div(
@@ -97,7 +90,7 @@ app.layout = dbc.Container([
             html.P(
                 "Tagesziel nicht erreicht!",
                 className="text-center",
-                style={'fontSize': '3.5em', 'fontWeight': 'bold', 'color': '#f8fafc'}
+                style={'fontSize': '3em', 'fontWeight': 'bold', 'color': '#f8fafc'}
             )
         ])
     ], id="failure-modal", is_open=False, centered=True, size="xl"),
