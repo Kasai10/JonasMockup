@@ -81,7 +81,7 @@ app.layout = dbc.Container([
             html.Div(
                 "😞",
                 style={
-                    'fontSize': '10em',
+                    'fontSize': '8em',
                     'color': '#ef4444',
                     'textAlign': 'center',
                     'marginBottom': '30px'
